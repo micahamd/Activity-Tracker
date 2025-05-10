@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Tailwind gray-100 */
+        }
+        .activity-color-preview {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            border: 1px solid #ccc;
+        }
+        .section-title {
+            font-size: 1.25rem; /* text-xl */
+            font-weight: 600; /* font-semibold */
+            margin-bottom: 1rem; /* mb-4 */
+            color: #1f2937; /* gray-800 */
+        }
+        .card {
+            background-color: white;
+            padding: 1.5rem; /* p-6 */
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+            margin-bottom: 1.5rem; /* mb-6 */
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem; /* rounded-md */
+            font-weight: 500;
+            transition: background-color 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #2563eb; /* blue-600 */
+        }
+        .btn-secondary {
+            background-color: #6b7280; /* gray-500 */
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563; /* gray-600 */
+        }
+        .btn-danger {
+            background-color: #ef4444; /* red-500 */
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #dc2626; /* red-600 */
+        }
+        .input-field {
+            border: 1px solid #d1d5db; /* gray-300 */
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem; /* rounded-md */
+            width: 100%;
+        }
+        .timer-bar-container {
+            width: 100%;
+            height: 10px;
+            background-color: #e5e7eb; /* gray-200 */
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        .timer-bar {
+            height: 100%;
+            background-color: #3b82f6; /* blue-500 */
+            width: 0%;
+            transition: width 0.1s linear; /* Smoother transition for the timer bar */
+        }
+        /* Responsive table */
+        .table-container {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 0.75rem; /* p-3 */
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb; /* gray-200 */
+        }
+        th {
+            background-color: #f9fafb; /* gray-50 */
+        }
+        /* Modal styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed;
+            z-index: 50;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 0.5rem;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <header class="mb-8 text-center">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-700">Activity Tracker</h1>
+    </header>
+
+    <div class="container mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-1 space-y-6">
+            <div class="card">
+                <h2 class="section-title">Add New Activity</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label for="activityName" class="block text-sm font-medium text-gray-700 mb-1">Activity Name:</label>
+                        <input type="text" id="activityName" class="input-field" placeholder="e.g., Coding">
+                    </div>
+                    <div>
+                        <label for="activityColor" class="block text-sm font-medium text-gray-700 mb-1">Activity Color:</label>
+                        <input type="color" id="activityColor" value="#3b82f6" class="input-field h-10">
+                    </div>
+                    <button id="addActivityBtn" class="btn btn-primary w-full">Add Activity</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="section-title">My Activities</h2>
+                <div id="activitiesList" class="space-y-2">
+                    <p class="text-gray-500 text-sm">No activities defined yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-1 card">
+            <h2 class="section-title">Timer</h2>
+            <div>
+                <label for="activitySelect" class="block text-sm font-medium text-gray-700 mb-1">Select Activity:</label>
+                <select id="activitySelect" class="input-field mb-4">
+                    <option value="">-- Select an activity --</option>
+                </select>
+            </div>
+            <div id="timerDisplay" class="text-4xl font-bold text-center my-6 text-gray-700">00:00:00</div>
+            <div class="timer-bar-container mb-6">
+                <div id="timerBar" class="timer-bar"></div>
+            </div>
+            <div class="flex space-x-4">
+                <button id="startStopBtn" class="btn btn-primary flex-1">Start</button>
+                <button id="resetBtn" class="btn btn-secondary flex-1">Reset</button>
+            </div>
+            <p id="timerStatus" class="text-sm text-gray-500 mt-2 text-center"></p>
+        </div>
+        
+        <div class="lg:col-span-1 space-y-6">
+            <div class="card">
+                <h2 class="section-title">Activity Log</h2>
+                <div class="mb-4">
+                    <label for="logFilterActivity" class="block text-sm font-medium text-gray-700 mb-1">Filter by Activity:</label>
+                    <select id="logFilterActivity" class="input-field">
+                        <option value="all">All Activities</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table id="activityLogTable">
+                        <thead>
+                            <tr>
+                                <th>Activity</th>
+                                <th>Start Time</th>
+                                <th>End Time</th>
+                                <th>Duration</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activityLogBody">
+                            <tr><td colspan="5" class="text-center text-gray-500 py-4">No logs yet.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="section-title">Activity Summary</h2>
+                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label for="summaryStartDate" class="block text-sm font-medium text-gray-700 mb-1">Start Date:</label>
+                        <input type="date" id="summaryStartDate" class="input-field">
+                    </div>
+                    <div>
+                        <label for="summaryEndDate" class="block text-sm font-medium text-gray-700 mb-1">End Date:</label>
+                        <input type="date" id="summaryEndDate" class="input-field">
+                    </div>
+                </div>
+                <button id="generateSummaryBtn" class="btn btn-primary w-full mb-4">Generate Summary</button>
+                <div id="summaryResults" class="space-y-2">
+                    <p class="text-gray-500 text-sm">Select a date range and generate summary.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="editLogModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="closeEditModalBtn">&times;</span>
+            <h3 class="text-lg font-semibold mb-4">Edit Log Entry</h3>
+            <input type="hidden" id="editLogId">
+            <div>
+                <label for="editLogActivity" class="block text-sm font-medium text-gray-700 mb-1">Activity:</label>
+                <select id="editLogActivity" class="input-field mb-2"></select>
+            </div>
+            <div>
+                <label for="editLogStartTime" class="block text-sm font-medium text-gray-700 mb-1">Start Time:</label>
+                <input type="datetime-local" id="editLogStartTime" class="input-field mb-2">
+            </div>
+            <div>
+                <label for="editLogEndTime" class="block text-sm font-medium text-gray-700 mb-1">End Time:</label>
+                <input type="datetime-local" id="editLogEndTime" class="input-field mb-4">
+            </div>
+            <button id="saveEditLogBtn" class="btn btn-primary w-full">Save Changes</button>
+        </div>
+    </div>
+
+
+    <script>
+        // DOM Elements
+        const activityNameInput = document.getElementById('activityName');
+        const activityColorInput = document.getElementById('activityColor');
+        const addActivityBtn = document.getElementById('addActivityBtn');
+        const activitiesListDiv = document.getElementById('activitiesList');
+        const activitySelect = document.getElementById('activitySelect');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const timerBar = document.getElementById('timerBar');
+        const startStopBtn = document.getElementById('startStopBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const timerStatus = document.getElementById('timerStatus');
+        const activityLogBody = document.getElementById('activityLogBody');
+        const summaryStartDateInput = document.getElementById('summaryStartDate');
+        const summaryEndDateInput = document.getElementById('summaryEndDate');
+        const generateSummaryBtn = document.getElementById('generateSummaryBtn');
+        const summaryResultsDiv = document.getElementById('summaryResults');
+        const logFilterActivitySelect = document.getElementById('logFilterActivity');
+
+        // Edit Modal Elements
+        const editLogModal = document.getElementById('editLogModal');
+        const closeEditModalBtn = document.getElementById('closeEditModalBtn');
+        const editLogIdInput = document.getElementById('editLogId');
+        const editLogActivitySelect = document.getElementById('editLogActivity');
+        const editLogStartTimeInput = document.getElementById('editLogStartTime');
+        const editLogEndTimeInput = document.getElementById('editLogEndTime');
+        const saveEditLogBtn = document.getElementById('saveEditLogBtn');
+
+        // App State
+        let activities = [];
+        let activityLog = [];
+        let timerInterval = null;
+        let secondsElapsed = 0;
+        let currentActivityId = null;
+        let timerStartTime = null;
+
+        // --- Utility Functions ---
+        function generateId() {
+            // Generates a simple unique ID
+            return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
+        }
+
+        function formatTime(totalSeconds) {
+            // Formats total seconds into HH:MM:SS string
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function formatDate(timestamp) {
+            // Formats a timestamp into a locale-specific date and time string
+            if (!timestamp) return 'N/A';
+            return new Date(timestamp).toLocaleString();
+        }
+        
+        function formatDateTimeLocal(timestamp) {
+            // Formats a timestamp for datetime-local input fields
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            // Format: YYYY-MM-DDTHH:mm
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+
+        // --- Local Storage ---
+        function saveData() {
+            // Saves current activities and logs to local storage
+            localStorage.setItem('activities', JSON.stringify(activities));
+            localStorage.setItem('activityLog', JSON.stringify(activityLog));
+        }
+
+        function loadData() {
+            // Loads activities and logs from local storage
+            const storedActivities = localStorage.getItem('activities');
+            const storedActivityLog = localStorage.getItem('activityLog');
+            if (storedActivities) {
+                activities = JSON.parse(storedActivities);
+            }
+            if (storedActivityLog) {
+                activityLog = JSON.parse(storedActivityLog);
+            }
+        }
+
+        // --- Activity Management ---
+        function renderActivities() {
+            // Clears and re-renders the list of activities in "My Activities"
+            // Also populates the select dropdowns for the timer and log filter
+            activitiesListDiv.innerHTML = ''; 
+            activitySelect.innerHTML = '<option value="">-- Select an activity --</option>'; 
+            logFilterActivitySelect.innerHTML = '<option value="all">All Activities</option>'; 
+            editLogActivitySelect.innerHTML = ''; // Clear edit modal select
+
+            if (activities.length === 0) {
+                activitiesListDiv.innerHTML = '<p class="text-gray-500 text-sm">No activities defined yet.</p>';
+                return;
+            }
+
+            activities.forEach(activity => {
+                // Create div for "My Activities" list
+                const activityDiv = document.createElement('div');
+                activityDiv.className = 'flex items-center justify-between p-2 border rounded-md hover:bg-gray-50';
+                activityDiv.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="activity-color-preview" style="background-color: ${activity.color};"></span>
+                        <span class="font-medium">${activity.name}</span>
+                    </div>
+                    <button class="text-red-500 hover:text-red-700 text-sm delete-activity-btn" data-id="${activity.id}">Delete</button>
+                `;
+                activitiesListDiv.appendChild(activityDiv);
+
+                // Populate select dropdown for timer
+                const option = document.createElement('option');
+                option.value = activity.id;
+                option.textContent = activity.name;
+                activitySelect.appendChild(option.cloneNode(true)); // Clone for activity select
+
+                // Populate select dropdown for log filter
+                logFilterActivitySelect.appendChild(option.cloneNode(true)); // Clone for log filter
+                
+                // Populate select dropdown for edit modal
+                editLogActivitySelect.appendChild(option.cloneNode(true)); // Clone for edit modal
+            });
+
+            // Add event listeners for delete buttons
+            document.querySelectorAll('.delete-activity-btn').forEach(button => {
+                button.addEventListener('click', handleDeleteActivity);
+            });
+        }
+        
+        function handleAddActivity() {
+            // Handles adding a new activity
+            const name = activityNameInput.value.trim();
+            const color = activityColorInput.value;
+
+            if (!name) {
+                // Using a custom modal or inline message would be better than alert
+                alert('Please enter an activity name.');
+                return;
+            }
+
+            // Check if activity name already exists (case-insensitive)
+            if (activities.some(activity => activity.name.toLowerCase() === name.toLowerCase())) {
+                alert('An activity with this name already exists.');
+                return;
+            }
+
+            const newActivity = { id: generateId(), name, color };
+            activities.push(newActivity);
+            
+            activityNameInput.value = ''; // Clear input
+            saveData();
+            renderActivities();
+            renderActivityLog(); // Refresh log
+            renderSummary();     // Refresh summary
+        }
+
+        function handleDeleteActivity(event) {
+            // Handles deleting an activity and its associated logs
+            const activityIdToDelete = event.target.dataset.id;
+            // Using a custom confirm modal would be better
+            if (confirm('Are you sure you want to delete this activity? This will also remove associated log entries.')) {
+                activities = activities.filter(activity => activity.id !== activityIdToDelete);
+                activityLog = activityLog.filter(log => log.activityId !== activityIdToDelete);
+                
+                saveData();
+                renderActivities();
+                renderActivityLog();
+                renderSummary();
+
+                // If the deleted activity was selected in the timer, reset the timer selection
+                if (currentActivityId === activityIdToDelete) {
+                    resetTimerFull(); // This will also deselect from dropdown
+                } else if (activitySelect.value === activityIdToDelete) {
+                     activitySelect.value = ""; // Deselect if it was chosen but not running
+                }
+            }
+        }
+
+
+        // --- Timer Logic ---
+        function updateTimerDisplay() {
+            // Updates the timer's HH:MM:SS display and the visual bar
+            timerDisplay.textContent = formatTime(secondsElapsed);
+            const progressPercentage = (secondsElapsed % 60) / 60 * 100; 
+            timerBar.style.width = `${progressPercentage}%`;
+        }
+
+        function startTimer() {
+            // Starts the timer for the selected activity
+            if (timerInterval) return; // Already running
+
+            currentActivityId = activitySelect.value;
+            if (!currentActivityId) {
+                alert('Please select an activity to track.');
+                return;
+            }
+
+            const selectedActivity = activities.find(act => act.id === currentActivityId);
+            if (!selectedActivity) {
+                alert('Selected activity not found. Please refresh or re-add.');
+                activitySelect.value = ""; // Clear invalid selection
+                return;
+            }
+            
+            timerBar.style.backgroundColor = selectedActivity.color; 
+            timerStatus.textContent = `Timing: ${selectedActivity.name}`;
+            timerStatus.style.color = selectedActivity.color;
+
+            // If resuming, secondsElapsed will be > 0. Adjust timerStartTime accordingly.
+            timerStartTime = Date.now() - (secondsElapsed * 1000); 
+
+            timerInterval = setInterval(() => {
+                // Calculate elapsed seconds based on the actual start time and current time
+                secondsElapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+                updateTimerDisplay();
+            }, 1000); // Update every second
+
+            startStopBtn.textContent = 'Stop';
+            startStopBtn.classList.remove('btn-primary');
+            startStopBtn.classList.add('btn-danger');
+            activitySelect.disabled = true; // Disable activity selection while timing
+            resetBtn.disabled = true;       // Disable reset while timing
+        }
+
+        function stopTimer() {
+            // Stops the timer and logs the activity session
+            if (!timerInterval) return; // Not running
+
+            clearInterval(timerInterval);
+            timerInterval = null;
+
+            // Log the activity only if an activity was selected and time has passed
+            if (currentActivityId && secondsElapsed > 0) {
+                const endTime = Date.now();
+                const logEntry = {
+                    id: generateId(),
+                    activityId: currentActivityId,
+                    startTime: timerStartTime, // This was set when timer started/resumed
+                    endTime: endTime,
+                    duration: secondsElapsed 
+                };
+                activityLog.unshift(logEntry); // Add to the beginning for chronological display (newest first)
+                saveData();
+                renderActivityLog();
+                renderSummary();
+            }
+            
+            timerStatus.textContent = `Timer stopped. Total: ${formatTime(secondsElapsed)}`;
+            timerStatus.style.color = '#6b7280'; // Reset to gray
+
+            startStopBtn.textContent = 'Start';
+            startStopBtn.classList.remove('btn-danger');
+            startStopBtn.classList.add('btn-primary');
+            activitySelect.disabled = false; // Re-enable activity selection
+            resetBtn.disabled = false;       // Re-enable reset
+        }
+        
+        function resetTimerFull() { 
+            // Stops timer (if running, without logging), resets seconds, activity selection, and display
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+                // UI updates for stopping a running timer are handled in stopTimer, but we don't call it to avoid logging
+                startStopBtn.textContent = 'Start';
+                startStopBtn.classList.remove('btn-danger');
+                startStopBtn.classList.add('btn-primary');
+                activitySelect.disabled = false;
+                resetBtn.disabled = false;
+            }
+            secondsElapsed = 0;
+            currentActivityId = null;
+            timerStartTime = null;
+            activitySelect.value = ""; 
+            timerStatus.textContent = "";
+            timerBar.style.backgroundColor = '#3b82f6'; 
+            timerBar.style.width = `0%`;
+            updateTimerDisplay(); 
+        }
+
+
+        function handleStartStop() {
+            // Toggles between starting and stopping the timer
+            if (timerInterval) {
+                stopTimer();
+            } else {
+                startTimer();
+            }
+        }
+        
+        function handleResetTimer() {
+            // Resets the timer. If running, asks for confirmation.
+            if (timerInterval) { 
+                if (confirm("Timer is running. Are you sure you want to reset? Current progress will be lost.")) {
+                    // Stop without logging
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    startStopBtn.textContent = 'Start';
+                    startStopBtn.classList.remove('btn-danger');
+                    startStopBtn.classList.add('btn-primary');
+                    activitySelect.disabled = false;
+                    resetBtn.disabled = false;
+                    
+                    secondsElapsed = 0;
+                    // currentActivityId remains selected unless resetTimerFull is called
+                    timerStartTime = null; 
+                    updateTimerDisplay();
+                    timerStatus.textContent = "Timer reset.";
+                    timerBar.style.width = `0%`;
+                }
+            } else { 
+                secondsElapsed = 0;
+                timerStartTime = null;
+                updateTimerDisplay();
+                timerStatus.textContent = "Timer reset.";
+                timerBar.style.width = `0%`;
+            }
+        }
+
+        // --- Activity Log ---
+        function renderActivityLog() {
+            // Renders the activity log table based on current logs and filter
+            activityLogBody.innerHTML = ''; 
+            const filterId = logFilterActivitySelect.value;
+
+            const logsToDisplay = activityLog.filter(log => {
+                return filterId === 'all' || log.activityId === filterId;
+            });
+
+            if (logsToDisplay.length === 0) {
+                activityLogBody.innerHTML = `<tr><td colspan="5" class="text-center text-gray-500 py-4">No logs for this filter.</td></tr>`;
+                return;
+            }
+
+            logsToDisplay.forEach(log => {
+                const activity = activities.find(act => act.id === log.activityId);
+                const activityName = activity ? activity.name : 'Unknown Activity (ID: ' + log.activityId + ')';
+                const activityColor = activity ? activity.color : '#cccccc';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><span class="activity-color-preview" style="background-color: ${activityColor};"></span>${activityName}</td>
+                    <td>${formatDate(log.startTime)}</td>
+                    <td>${formatDate(log.endTime)}</td>
+                    <td>${formatTime(log.duration)}</td>
+                    <td>
+                        <button class="text-blue-500 hover:text-blue-700 text-sm edit-log-btn mr-2" data-id="${log.id}">Edit</button>
+                        <button class="text-red-500 hover:text-red-700 text-sm delete-log-btn" data-id="${log.id}">Delete</button>
+                    </td>
+                `;
+                activityLogBody.appendChild(row);
+            });
+
+            // Add event listeners for new edit and delete buttons in the log
+            document.querySelectorAll('.edit-log-btn').forEach(btn => btn.addEventListener('click', handleOpenEditModal));
+            document.querySelectorAll('.delete-log-btn').forEach(btn => btn.addEventListener('click', handleDeleteLogEntry));
+        }
+
+        function handleDeleteLogEntry(event) {
+            // Handles deleting a specific log entry
+            const logIdToDelete = event.target.dataset.id;
+            if (confirm('Are you sure you want to delete this log entry?')) {
+                activityLog = activityLog.filter(log => log.id !== logIdToDelete);
+                saveData();
+                renderActivityLog();
+                renderSummary(); // Summary might change after deleting a log
+            }
+        }
+        
+        // --- Edit Log Modal Logic ---
+        function handleOpenEditModal(event) {
+            // Opens the modal and populates it with data from the selected log entry
+            const logId = event.target.dataset.id;
+            const logEntry = activityLog.find(log => log.id === logId);
+            if (!logEntry) {
+                console.error("Log entry not found for editing:", logId);
+                return;
+            }
+
+            editLogIdInput.value = logEntry.id;
+            // Ensure the activity select in the modal is up-to-date and select the correct one
+            // renderActivities() already populates editLogActivitySelect
+            editLogActivitySelect.value = logEntry.activityId; 
+            editLogStartTimeInput.value = formatDateTimeLocal(logEntry.startTime);
+            editLogEndTimeInput.value = formatDateTimeLocal(logEntry.endTime);
+            
+            editLogModal.style.display = 'block';
+        }
+
+        closeEditModalBtn.onclick = function() {
+            // Closes the edit modal
+            editLogModal.style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            // Closes the modal if user clicks outside of the modal content
+            if (event.target == editLogModal) {
+                editLogModal.style.display = 'none';
+            }
+        }
+
+        saveEditLogBtn.addEventListener('click', () => {
+            // Saves the changes made in the edit log modal
+            const id = editLogIdInput.value;
+            const newActivityId = editLogActivitySelect.value;
+            const newStartTimeStr = editLogStartTimeInput.value;
+            const newEndTimeStr = editLogEndTimeInput.value;
+
+            if (!newActivityId || !newStartTimeStr || !newEndTimeStr) {
+                alert('All fields (Activity, Start Time, End Time) are required.');
+                return;
+            }
+
+            const newStartTime = new Date(newStartTimeStr).getTime();
+            const newEndTime = new Date(newEndTimeStr).getTime();
+
+            if (newStartTime >= newEndTime) {
+                alert('End time must be after start time.');
+                return;
+            }
+
+            const newDuration = Math.floor((newEndTime - newStartTime) / 1000); // Duration in seconds
+
+            const logIndex = activityLog.findIndex(log => log.id === id);
+            if (logIndex > -1) {
+                activityLog[logIndex] = {
+                    ...activityLog[logIndex], // Preserve original ID
+                    activityId: newActivityId,
+                    startTime: newStartTime,
+                    endTime: newEndTime,
+                    duration: newDuration
+                };
+                saveData();
+                renderActivityLog();
+                renderSummary(); // Update summary as log data changed
+                editLogModal.style.display = 'none'; // Close modal on successful save
+            } else {
+                alert('Error: Log entry not found for saving.');
+            }
+        });
+
+
+        // --- Summary ---
+        function renderSummary() {
+            // Renders the activity summary based on selected date range
+            summaryResultsDiv.innerHTML = ''; 
+            
+            const startDateStr = summaryStartDateInput.value;
+            const endDateStr = summaryEndDateInput.value;
+
+            let filteredLogs = activityLog;
+
+            // Apply start date filter
+            if (startDateStr) {
+                const startDate = new Date(startDateStr);
+                startDate.setHours(0, 0, 0, 0); // Set to start of the day
+                filteredLogs = filteredLogs.filter(log => log.startTime >= startDate.getTime());
+            }
+
+            // Apply end date filter
+            if (endDateStr) {
+                const endDate = new Date(endDateStr);
+                endDate.setHours(23, 59, 59, 999); // Set to end of the day
+                filteredLogs = filteredLogs.filter(log => log.endTime <= endDate.getTime());
+            }
+            
+            if (filteredLogs.length === 0 && (startDateStr || endDateStr)) { // If dates are set but no logs
+                summaryResultsDiv.innerHTML = '<p class="text-gray-500 text-sm">No activity data for the selected period.</p>';
+                return;
+            }
+             if (filteredLogs.length === 0 && activityLog.length > 0 && (!startDateStr && !endDateStr)) { // If dates are NOT set, but there are logs, means all logs are outside some implicit range (should not happen with current logic)
+                // This case is unlikely if date filters are empty, as it should show all-time summary.
+                // It's more likely to be hit if all logs are filtered out by date.
+                summaryResultsDiv.innerHTML = '<p class="text-gray-500 text-sm">No activity data for the selected period.</p>';
+                return;
+            }
+            if (activityLog.length === 0){ // No logs at all
+                 summaryResultsDiv.innerHTML = '<p class="text-gray-500 text-sm">No activities logged yet. Start timing an activity!</p>';
+                return;
+            }
+
+
+            const summary = {}; // Stores total time per activityId: { activityId: totalSeconds, ... }
+            filteredLogs.forEach(log => {
+                if (!summary[log.activityId]) {
+                    summary[log.activityId] = 0;
+                }
+                summary[log.activityId] += log.duration;
+            });
+
+            if (Object.keys(summary).length === 0) { // No activities to summarize in the filtered logs
+                 summaryResultsDiv.innerHTML = (startDateStr || endDateStr) 
+                    ? '<p class="text-gray-500 text-sm">No activity data for the selected period.</p>'
+                    : '<p class="text-gray-500 text-sm">No activities logged yet. Start timing an activity!</p>';
+                return;
+            }
+            
+            const summaryList = document.createElement('ul');
+            summaryList.className = 'space-y-1';
+
+            // Create and display list items for each summarized activity
+            for (const activityId in summary) {
+                const activity = activities.find(act => act.id === activityId);
+                const activityName = activity ? activity.name : 'Unknown Activity (ID: ' + activityId + ')';
+                const activityColor = activity ? activity.color : '#cccccc';
+                const totalTime = formatTime(summary[activityId]);
+
+                const listItem = document.createElement('li');
+                listItem.className = 'flex justify-between items-center text-sm';
+                listItem.innerHTML = `
+                    <div>
+                        <span class="activity-color-preview" style="background-color: ${activityColor};"></span>
+                        <span>${activityName}</span>
+                    </div>
+                    <span class="font-medium">${totalTime}</span>
+                `;
+                summaryList.appendChild(listItem);
+            }
+            summaryResultsDiv.appendChild(summaryList);
+        }
+
+
+        // --- Event Listeners ---
+        addActivityBtn.addEventListener('click', handleAddActivity);
+        startStopBtn.addEventListener('click', handleStartStop);
+        resetBtn.addEventListener('click', handleResetTimer);
+        generateSummaryBtn.addEventListener('click', renderSummary); // Manual trigger for summary
+        logFilterActivitySelect.addEventListener('change', renderActivityLog); // Update log when filter changes
+        
+        // Auto-update summary when date inputs change
+        summaryStartDateInput.addEventListener('change', renderSummary); 
+        summaryEndDateInput.addEventListener('change', renderSummary);   
+
+
+        // --- Initialization ---
+        function init() {
+            // Initial setup when the page loads
+            loadData();          // Load any saved data from local storage
+            renderActivities();  // Display activities and populate dropdowns
+            renderActivityLog(); // Display activity logs
+            renderSummary();     // Display initial summary (all time)
+            updateTimerDisplay();// Ensure timer shows 00:00:00 initially
+        }
+
+        // Run initialization function once the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
