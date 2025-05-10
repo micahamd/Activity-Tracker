@@ -6,6 +6,7 @@
     <title>Activity Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -189,6 +190,16 @@
                         <option value="all">All Activities</option>
                     </select>
                 </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label for="logFilterStartDate" class="block text-sm font-medium text-gray-700 mb-1">Start Date:</label>
+                        <input type="date" id="logFilterStartDate" class="input-field">
+                    </div>
+                    <div>
+                        <label for="logFilterEndDate" class="block text-sm font-medium text-gray-700 mb-1">End Date:</label>
+                        <input type="date" id="logFilterEndDate" class="input-field">
+                    </div>
+                </div>
                 <div class="table-container">
                     <table id="activityLogTable">
                         <thead>
@@ -197,11 +208,12 @@
                                 <th>Start Time</th>
                                 <th>End Time</th>
                                 <th>Duration</th>
+                                <th>Notes</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="activityLogBody">
-                            <tr><td colspan="5" class="text-center text-gray-500 py-4">No logs yet.</td></tr>
+                            <tr><td colspan="6" class="text-center text-gray-500 py-4">No logs yet.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -223,6 +235,16 @@
                 <div id="summaryResults" class="space-y-2">
                     <p class="text-gray-500 text-sm">Select a date range and generate summary.</p>
                 </div>
+                <div class="my-4">
+                    <canvas id="summaryPieChart" width="300" height="180" aria-label="Activity Summary Pie Chart"></canvas>
+                </div>
+                <div class="flex gap-2 mt-2">
+                    <button id="exportDataBtn" class="btn btn-secondary flex-1">Export Data</button>
+                    <label class="btn btn-secondary flex-1 cursor-pointer mb-0">
+                        Import Data
+                        <input type="file" id="importDataInput" accept="application/json" style="display:none">
+                    </label>
+                </div>
             </div>
         </div>
     </div>
@@ -243,6 +265,10 @@
             <div>
                 <label for="editLogEndTime" class="block text-sm font-medium text-gray-700 mb-1">End Time:</label>
                 <input type="datetime-local" id="editLogEndTime" class="input-field mb-4">
+            </div>
+            <div>
+                <label for="editLogNotes" class="block text-sm font-medium text-gray-700 mb-1">Notes:</label>
+                <textarea id="editLogNotes" class="input-field mb-4" rows="3" placeholder="Add any notes for this session..."></textarea>
             </div>
             <button id="saveEditLogBtn" class="btn btn-primary w-full">Save Changes</button>
         </div>
@@ -267,6 +293,8 @@
         const generateSummaryBtn = document.getElementById('generateSummaryBtn');
         const summaryResultsDiv = document.getElementById('summaryResults');
         const logFilterActivitySelect = document.getElementById('logFilterActivity');
+        const logFilterStartDateInput = document.getElementById('logFilterStartDate');
+        const logFilterEndDateInput = document.getElementById('logFilterEndDate');
 
         // Edit Modal Elements
         const editLogModal = document.getElementById('editLogModal');
@@ -275,6 +303,7 @@
         const editLogActivitySelect = document.getElementById('editLogActivity');
         const editLogStartTimeInput = document.getElementById('editLogStartTime');
         const editLogEndTimeInput = document.getElementById('editLogEndTime');
+        const editLogNotesInput = document.getElementById('editLogNotes');
         const saveEditLogBtn = document.getElementById('saveEditLogBtn');
 
         // App State
@@ -284,6 +313,11 @@
         let secondsElapsed = 0;
         let currentActivityId = null;
         let timerStartTime = null;
+        let summaryPieChartInstance = null; // <-- Add this line
+
+        // DOM Elements for Export/Import
+        const exportDataBtn = document.getElementById('exportDataBtn');
+        const importDataInput = document.getElementById('importDataInput');
 
         // --- Utility Functions ---
         function generateId() {
@@ -494,7 +528,8 @@
                     activityId: currentActivityId,
                     startTime: timerStartTime, // This was set when timer started/resumed
                     endTime: endTime,
-                    duration: secondsElapsed 
+                    duration: secondsElapsed,
+                    notes: "" // Initialize with empty notes
                 };
                 activityLog.unshift(logEntry); // Add to the beginning for chronological display (newest first)
                 saveData();
@@ -578,13 +613,31 @@
             // Renders the activity log table based on current logs and filter
             activityLogBody.innerHTML = ''; 
             const filterId = logFilterActivitySelect.value;
+            const startDateStr = logFilterStartDateInput.value;
+            const endDateStr = logFilterEndDateInput.value;
 
             const logsToDisplay = activityLog.filter(log => {
-                return filterId === 'all' || log.activityId === filterId;
+                const logStartTime = new Date(log.startTime); // Use the start time of the log for date comparison
+
+                let matchesActivity = (filterId === 'all' || log.activityId === filterId);
+                let matchesStartDate = true;
+                let matchesEndDate = true;
+
+                if (startDateStr) {
+                    const filterStartDate = new Date(startDateStr);
+                    filterStartDate.setHours(0, 0, 0, 0); // Compare with the start of the filter day
+                    matchesStartDate = logStartTime >= filterStartDate;
+                }
+                if (endDateStr) {
+                    const filterEndDate = new Date(endDateStr);
+                    filterEndDate.setHours(23, 59, 59, 999); // Compare with the end of the filter day
+                    matchesEndDate = logStartTime <= filterEndDate;
+                }
+                return matchesActivity && matchesStartDate && matchesEndDate;
             });
 
             if (logsToDisplay.length === 0) {
-                activityLogBody.innerHTML = `<tr><td colspan="5" class="text-center text-gray-500 py-4">No logs for this filter.</td></tr>`;
+                activityLogBody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-4">No logs for this filter.</td></tr>`;
                 return;
             }
 
@@ -599,6 +652,7 @@
                     <td>${formatDate(log.startTime)}</td>
                     <td>${formatDate(log.endTime)}</td>
                     <td>${formatTime(log.duration)}</td>
+                    <td>${log.notes || ''}</td>
                     <td>
                         <button class="text-blue-500 hover:text-blue-700 text-sm edit-log-btn mr-2" data-id="${log.id}">Edit</button>
                         <button class="text-red-500 hover:text-red-700 text-sm delete-log-btn" data-id="${log.id}">Delete</button>
@@ -639,6 +693,7 @@
             editLogActivitySelect.value = logEntry.activityId; 
             editLogStartTimeInput.value = formatDateTimeLocal(logEntry.startTime);
             editLogEndTimeInput.value = formatDateTimeLocal(logEntry.endTime);
+            editLogNotesInput.value = logEntry.notes || ''; // Populate notes
             
             editLogModal.style.display = 'block';
         }
@@ -661,6 +716,7 @@
             const newActivityId = editLogActivitySelect.value;
             const newStartTimeStr = editLogStartTimeInput.value;
             const newEndTimeStr = editLogEndTimeInput.value;
+            const newNotes = editLogNotesInput.value.trim(); // Get notes value
 
             if (!newActivityId || !newStartTimeStr || !newEndTimeStr) {
                 alert('All fields (Activity, Start Time, End Time) are required.');
@@ -684,7 +740,8 @@
                     activityId: newActivityId,
                     startTime: newStartTime,
                     endTime: newEndTime,
-                    duration: newDuration
+                    duration: newDuration,
+                    notes: newNotes // Save notes
                 };
                 saveData();
                 renderActivityLog();
@@ -720,18 +777,27 @@
                 filteredLogs = filteredLogs.filter(log => log.endTime <= endDate.getTime());
             }
             
+            // Clear previous chart if it exists
+            if (summaryPieChartInstance) {
+                summaryPieChartInstance.destroy();
+                summaryPieChartInstance = null;
+            }
+            const pieChartCanvas = document.getElementById('summaryPieChart');
+            const ctx = pieChartCanvas.getContext('2d');
+
             if (filteredLogs.length === 0 && (startDateStr || endDateStr)) { // If dates are set but no logs
                 summaryResultsDiv.innerHTML = '<p class="text-gray-500 text-sm">No activity data for the selected period.</p>';
+                pieChartCanvas.style.display = 'none'; // Hide chart
                 return;
             }
-             if (filteredLogs.length === 0 && activityLog.length > 0 && (!startDateStr && !endDateStr)) { // If dates are NOT set, but there are logs, means all logs are outside some implicit range (should not happen with current logic)
-                // This case is unlikely if date filters are empty, as it should show all-time summary.
-                // It's more likely to be hit if all logs are filtered out by date.
+             if (filteredLogs.length === 0 && activityLog.length > 0 && (!startDateStr && !endDateStr)) { 
                 summaryResultsDiv.innerHTML = '<p class="text-gray-500 text-sm">No activity data for the selected period.</p>';
+                pieChartCanvas.style.display = 'none'; // Hide chart
                 return;
             }
             if (activityLog.length === 0){ // No logs at all
                  summaryResultsDiv.innerHTML = '<p class="text-gray-500 text-sm">No activities logged yet. Start timing an activity!</p>';
+                 pieChartCanvas.style.display = 'none'; // Hide chart
                 return;
             }
 
@@ -748,11 +814,17 @@
                  summaryResultsDiv.innerHTML = (startDateStr || endDateStr) 
                     ? '<p class="text-gray-500 text-sm">No activity data for the selected period.</p>'
                     : '<p class="text-gray-500 text-sm">No activities logged yet. Start timing an activity!</p>';
+                pieChartCanvas.style.display = 'none'; // Hide chart
                 return;
             }
             
+            pieChartCanvas.style.display = 'block'; // Show chart
             const summaryList = document.createElement('ul');
             summaryList.className = 'space-y-1';
+
+            const chartLabels = [];
+            const chartData = [];
+            const chartColors = [];
 
             // Create and display list items for each summarized activity
             for (const activityId in summary) {
@@ -760,6 +832,10 @@
                 const activityName = activity ? activity.name : 'Unknown Activity (ID: ' + activityId + ')';
                 const activityColor = activity ? activity.color : '#cccccc';
                 const totalTime = formatTime(summary[activityId]);
+
+                chartLabels.push(activityName);
+                chartData.push(summary[activityId]);
+                chartColors.push(activityColor);
 
                 const listItem = document.createElement('li');
                 listItem.className = 'flex justify-between items-center text-sm';
@@ -773,6 +849,99 @@
                 summaryList.appendChild(listItem);
             }
             summaryResultsDiv.appendChild(summaryList);
+
+            // Render Pie Chart
+            summaryPieChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: 'Activity Duration',
+                        data: chartData,
+                        backgroundColor: chartColors,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += formatTime(context.parsed);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Data Export/Import ---
+        function handleExportData() {
+            const dataToExport = {
+                activities: activities,
+                activityLog: activityLog
+            };
+            const jsonString = JSON.stringify(dataToExport, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `activity_tracker_data_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            alert('Data exported successfully!');
+        }
+
+        function handleImportData(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (importedData && Array.isArray(importedData.activities) && Array.isArray(importedData.activityLog)) {
+                        if (confirm('This will replace all current activities and logs. Are you sure?')) {
+                            activities = importedData.activities;
+                            activityLog = importedData.activityLog;
+                            saveData();
+                            renderActivities();
+                            renderActivityLog();
+                            renderSummary();
+                            alert('Data imported successfully!');
+                        }
+                    } else {
+                        alert('Invalid file format.');
+                    }
+                } catch (error) {
+                    console.error('Error importing data:', error);
+                    alert('Error importing data. Check console for details.');
+                } finally {
+                    // Reset file input to allow importing the same file again
+                    importDataInput.value = '';
+                }
+            };
+            reader.onerror = function() {
+                alert('Error reading file.');
+                importDataInput.value = '';
+            };
+            reader.readAsText(file);
         }
 
 
@@ -786,6 +955,15 @@
         // Auto-update summary when date inputs change
         summaryStartDateInput.addEventListener('change', renderSummary); 
         summaryEndDateInput.addEventListener('change', renderSummary);   
+
+        // Log filter listeners
+        logFilterActivitySelect.addEventListener('change', renderActivityLog);
+        logFilterStartDateInput.addEventListener('change', renderActivityLog);
+        logFilterEndDateInput.addEventListener('change', renderActivityLog);
+
+        // Export/Import Listeners
+        exportDataBtn.addEventListener('click', handleExportData);
+        importDataInput.addEventListener('change', handleImportData);
 
 
         // --- Initialization ---
