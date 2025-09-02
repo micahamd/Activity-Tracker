@@ -135,9 +135,13 @@
 <body class="p-4 md:p-8">
     <header class="mb-8 text-center">
         <h1 class="text-3xl md:text-4xl font-bold text-gray-700">Activity Tracker</h1>
+        <div id="userSession" class="mt-2" style="display: none;">
+            <span class="text-gray-600">Welcome, <span id="usernameDisplay" class="font-semibold"></span>!</span>
+            <button id="logoutBtn" class="ml-4 text-sm text-blue-500 hover:underline">(Logout)</button>
+        </div>
     </header>
 
-    <div class="container mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="container mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6" id="mainContent" style="visibility: hidden;">
         <div class="lg:col-span-1 space-y-6">
             <div class="card">
                 <h2 class="section-title">Add New Activity</h2>
@@ -249,6 +253,18 @@
         </div>
     </div>
 
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-lg font-semibold mb-4">Welcome!</h3>
+            <p class="text-sm text-gray-600 mb-4">Please enter a username to save and load your activities. This is stored only in your browser.</p>
+            <div>
+                <label for="usernameInput" class="block text-sm font-medium text-gray-700 mb-1">Username:</label>
+                <input type="text" id="usernameInput" class="input-field" placeholder="e.g., micah">
+            </div>
+            <button id="loginBtn" class="btn btn-primary w-full mt-4">Login / Register</button>
+        </div>
+    </div>
+
     <div id="editLogModal" class="modal">
         <div class="modal-content">
             <span class="close-button" id="closeEditModalBtn">&times;</span>
@@ -306,14 +322,24 @@
         const editLogNotesInput = document.getElementById('editLogNotes');
         const saveEditLogBtn = document.getElementById('saveEditLogBtn');
 
+        // Login Modal Elements
+        const loginModal = document.getElementById('loginModal');
+        const usernameInput = document.getElementById('usernameInput');
+        const loginBtn = document.getElementById('loginBtn');
+        const userSessionDiv = document.getElementById('userSession');
+        const usernameDisplay = document.getElementById('usernameDisplay');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const mainContent = document.getElementById('mainContent');
+
         // App State
+        let currentUser = null;
         let activities = [];
         let activityLog = [];
         let timerInterval = null;
         let secondsElapsed = 0;
         let currentActivityId = null;
         let timerStartTime = null;
-        let summaryPieChartInstance = null; // <-- Add this line
+        let summaryPieChartInstance = null;
 
         // DOM Elements for Export/Import
         const exportDataBtn = document.getElementById('exportDataBtn');
@@ -321,12 +347,10 @@
 
         // --- Utility Functions ---
         function generateId() {
-            // Generates a simple unique ID
             return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
         }
 
         function formatTime(totalSeconds) {
-            // Formats total seconds into HH:MM:SS string
             const hours = Math.floor(totalSeconds / 3600);
             const minutes = Math.floor((totalSeconds % 3600) / 60);
             const seconds = totalSeconds % 60;
@@ -334,16 +358,13 @@
         }
 
         function formatDate(timestamp) {
-            // Formats a timestamp into a locale-specific date and time string
             if (!timestamp) return 'N/A';
             return new Date(timestamp).toLocaleString();
         }
         
         function formatDateTimeLocal(timestamp) {
-            // Formats a timestamp for datetime-local input fields
             if (!timestamp) return '';
             const date = new Date(timestamp);
-            // Format: YYYY-MM-DDTHH:mm
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
@@ -353,33 +374,41 @@
         }
 
 
-        // --- Local Storage ---
+        // --- Local Storage & User Data ---
         function saveData() {
-            // Saves current activities and logs to local storage
-            localStorage.setItem('activities', JSON.stringify(activities));
-            localStorage.setItem('activityLog', JSON.stringify(activityLog));
+            if (!currentUser) return;
+            localStorage.setItem(`${currentUser}_activities`, JSON.stringify(activities));
+            localStorage.setItem(`${currentUser}_activityLog`, JSON.stringify(activityLog));
         }
 
         function loadData() {
-            // Loads activities and logs from local storage
-            const storedActivities = localStorage.getItem('activities');
-            const storedActivityLog = localStorage.getItem('activityLog');
-            if (storedActivities) {
-                activities = JSON.parse(storedActivities);
-            }
-            if (storedActivityLog) {
-                activityLog = JSON.parse(storedActivityLog);
+            if (!currentUser) return;
+            
+            const storedActivities = localStorage.getItem(`${currentUser}_activities`);
+            const storedActivityLog = localStorage.getItem(`${currentUser}_activityLog`);
+            
+            activities = [];
+            activityLog = [];
+
+            try {
+                if (storedActivities) {
+                    activities = JSON.parse(storedActivities);
+                }
+                if (storedActivityLog) {
+                    activityLog = JSON.parse(storedActivityLog);
+                }
+            } catch (e) {
+                console.error("Error parsing data from localStorage", e);
+                alert("Could not load your data. It might be corrupted.");
             }
         }
 
         // --- Activity Management ---
         function renderActivities() {
-            // Clears and re-renders the list of activities in "My Activities"
-            // Also populates the select dropdowns for the timer and log filter
             activitiesListDiv.innerHTML = ''; 
             activitySelect.innerHTML = '<option value="">-- Select an activity --</option>'; 
             logFilterActivitySelect.innerHTML = '<option value="all">All Activities</option>'; 
-            editLogActivitySelect.innerHTML = ''; // Clear edit modal select
+            editLogActivitySelect.innerHTML = '';
 
             if (activities.length === 0) {
                 activitiesListDiv.innerHTML = '<p class="text-gray-500 text-sm">No activities defined yet.</p>';
@@ -387,7 +416,6 @@
             }
 
             activities.forEach(activity => {
-                // Create div for "My Activities" list
                 const activityDiv = document.createElement('div');
                 activityDiv.className = 'flex items-center justify-between p-2 border rounded-md hover:bg-gray-50';
                 activityDiv.innerHTML = `
@@ -399,37 +427,28 @@
                 `;
                 activitiesListDiv.appendChild(activityDiv);
 
-                // Populate select dropdown for timer
                 const option = document.createElement('option');
                 option.value = activity.id;
                 option.textContent = activity.name;
-                activitySelect.appendChild(option.cloneNode(true)); // Clone for activity select
-
-                // Populate select dropdown for log filter
-                logFilterActivitySelect.appendChild(option.cloneNode(true)); // Clone for log filter
-                
-                // Populate select dropdown for edit modal
-                editLogActivitySelect.appendChild(option.cloneNode(true)); // Clone for edit modal
+                activitySelect.appendChild(option.cloneNode(true));
+                logFilterActivitySelect.appendChild(option.cloneNode(true));
+                editLogActivitySelect.appendChild(option.cloneNode(true));
             });
 
-            // Add event listeners for delete buttons
             document.querySelectorAll('.delete-activity-btn').forEach(button => {
                 button.addEventListener('click', handleDeleteActivity);
             });
         }
         
         function handleAddActivity() {
-            // Handles adding a new activity
             const name = activityNameInput.value.trim();
             const color = activityColorInput.value;
 
             if (!name) {
-                // Using a custom modal or inline message would be better than alert
                 alert('Please enter an activity name.');
                 return;
             }
 
-            // Check if activity name already exists (case-insensitive)
             if (activities.some(activity => activity.name.toLowerCase() === name.toLowerCase())) {
                 alert('An activity with this name already exists.');
                 return;
@@ -438,17 +457,15 @@
             const newActivity = { id: generateId(), name, color };
             activities.push(newActivity);
             
-            activityNameInput.value = ''; // Clear input
+            activityNameInput.value = '';
             saveData();
             renderActivities();
-            renderActivityLog(); // Refresh log
-            renderSummary();     // Refresh summary
+            renderActivityLog();
+            renderSummary();
         }
 
         function handleDeleteActivity(event) {
-            // Handles deleting an activity and its associated logs
             const activityIdToDelete = event.target.dataset.id;
-            // Using a custom confirm modal would be better
             if (confirm('Are you sure you want to delete this activity? This will also remove associated log entries.')) {
                 activities = activities.filter(activity => activity.id !== activityIdToDelete);
                 activityLog = activityLog.filter(log => log.activityId !== activityIdToDelete);
@@ -458,11 +475,10 @@
                 renderActivityLog();
                 renderSummary();
 
-                // If the deleted activity was selected in the timer, reset the timer selection
                 if (currentActivityId === activityIdToDelete) {
-                    resetTimerFull(); // This will also deselect from dropdown
+                    resetTimerFull();
                 } else if (activitySelect.value === activityIdToDelete) {
-                     activitySelect.value = ""; // Deselect if it was chosen but not running
+                     activitySelect.value = "";
                 }
             }
         }
@@ -470,15 +486,13 @@
 
         // --- Timer Logic ---
         function updateTimerDisplay() {
-            // Updates the timer's HH:MM:SS display and the visual bar
             timerDisplay.textContent = formatTime(secondsElapsed);
             const progressPercentage = (secondsElapsed % 60) / 60 * 100; 
             timerBar.style.width = `${progressPercentage}%`;
         }
 
         function startTimer() {
-            // Starts the timer for the selected activity
-            if (timerInterval) return; // Already running
+            if (timerInterval) return;
 
             currentActivityId = activitySelect.value;
             if (!currentActivityId) {
@@ -489,7 +503,7 @@
             const selectedActivity = activities.find(act => act.id === currentActivityId);
             if (!selectedActivity) {
                 alert('Selected activity not found. Please refresh or re-add.');
-                activitySelect.value = ""; // Clear invalid selection
+                activitySelect.value = "";
                 return;
             }
             
@@ -497,62 +511,56 @@
             timerStatus.textContent = `Timing: ${selectedActivity.name}`;
             timerStatus.style.color = selectedActivity.color;
 
-            // If resuming, secondsElapsed will be > 0. Adjust timerStartTime accordingly.
             timerStartTime = Date.now() - (secondsElapsed * 1000); 
 
             timerInterval = setInterval(() => {
-                // Calculate elapsed seconds based on the actual start time and current time
                 secondsElapsed = Math.floor((Date.now() - timerStartTime) / 1000);
                 updateTimerDisplay();
-            }, 1000); // Update every second
+            }, 1000);
 
             startStopBtn.textContent = 'Stop';
             startStopBtn.classList.remove('btn-primary');
             startStopBtn.classList.add('btn-danger');
-            activitySelect.disabled = true; // Disable activity selection while timing
-            resetBtn.disabled = true;       // Disable reset while timing
+            activitySelect.disabled = true;
+            resetBtn.disabled = true;
         }
 
         function stopTimer() {
-            // Stops the timer and logs the activity session
-            if (!timerInterval) return; // Not running
+            if (!timerInterval) return;
 
             clearInterval(timerInterval);
             timerInterval = null;
 
-            // Log the activity only if an activity was selected and time has passed
             if (currentActivityId && secondsElapsed > 0) {
                 const endTime = Date.now();
                 const logEntry = {
                     id: generateId(),
                     activityId: currentActivityId,
-                    startTime: timerStartTime, // This was set when timer started/resumed
+                    startTime: timerStartTime,
                     endTime: endTime,
                     duration: secondsElapsed,
-                    notes: "" // Initialize with empty notes
+                    notes: ""
                 };
-                activityLog.unshift(logEntry); // Add to the beginning for chronological display (newest first)
+                activityLog.unshift(logEntry);
                 saveData();
                 renderActivityLog();
                 renderSummary();
             }
             
             timerStatus.textContent = `Timer stopped. Total: ${formatTime(secondsElapsed)}`;
-            timerStatus.style.color = '#6b7280'; // Reset to gray
+            timerStatus.style.color = '#6b7280';
 
             startStopBtn.textContent = 'Start';
             startStopBtn.classList.remove('btn-danger');
             startStopBtn.classList.add('btn-primary');
-            activitySelect.disabled = false; // Re-enable activity selection
-            resetBtn.disabled = false;       // Re-enable reset
+            activitySelect.disabled = false;
+            resetBtn.disabled = false;
         }
         
         function resetTimerFull() { 
-            // Stops timer (if running, without logging), resets seconds, activity selection, and display
             if (timerInterval) {
                 clearInterval(timerInterval);
                 timerInterval = null;
-                // UI updates for stopping a running timer are handled in stopTimer, but we don't call it to avoid logging
                 startStopBtn.textContent = 'Start';
                 startStopBtn.classList.remove('btn-danger');
                 startStopBtn.classList.add('btn-primary');
@@ -571,7 +579,6 @@
 
 
         function handleStartStop() {
-            // Toggles between starting and stopping the timer
             if (timerInterval) {
                 stopTimer();
             } else {
@@ -580,10 +587,8 @@
         }
         
         function handleResetTimer() {
-            // Resets the timer. If running, asks for confirmation.
             if (timerInterval) { 
                 if (confirm("Timer is running. Are you sure you want to reset? Current progress will be lost.")) {
-                    // Stop without logging
                     clearInterval(timerInterval);
                     timerInterval = null;
                     startStopBtn.textContent = 'Start';
@@ -593,7 +598,6 @@
                     resetBtn.disabled = false;
                     
                     secondsElapsed = 0;
-                    // currentActivityId remains selected unless resetTimerFull is called
                     timerStartTime = null; 
                     updateTimerDisplay();
                     timerStatus.textContent = "Timer reset.";
@@ -610,14 +614,13 @@
 
         // --- Activity Log ---
         function renderActivityLog() {
-            // Renders the activity log table based on current logs and filter
             activityLogBody.innerHTML = ''; 
             const filterId = logFilterActivitySelect.value;
             const startDateStr = logFilterStartDateInput.value;
             const endDateStr = logFilterEndDateInput.value;
 
             const logsToDisplay = activityLog.filter(log => {
-                const logStartTime = new Date(log.startTime); // Use the start time of the log for date comparison
+                const logStartTime = new Date(log.startTime);
 
                 let matchesActivity = (filterId === 'all' || log.activityId === filterId);
                 let matchesStartDate = true;
@@ -625,12 +628,12 @@
 
                 if (startDateStr) {
                     const filterStartDate = new Date(startDateStr);
-                    filterStartDate.setHours(0, 0, 0, 0); // Compare with the start of the filter day
+                    filterStartDate.setHours(0, 0, 0, 0);
                     matchesStartDate = logStartTime >= filterStartDate;
                 }
                 if (endDateStr) {
                     const filterEndDate = new Date(endDateStr);
-                    filterEndDate.setHours(23, 59, 59, 999); // Compare with the end of the filter day
+                    filterEndDate.setHours(23, 59, 59, 999);
                     matchesEndDate = logStartTime <= filterEndDate;
                 }
                 return matchesActivity && matchesStartDate && matchesEndDate;
@@ -643,7 +646,7 @@
 
             logsToDisplay.forEach(log => {
                 const activity = activities.find(act => act.id === log.activityId);
-                const activityName = activity ? activity.name : 'Unknown Activity (ID: ' + log.activityId + ')';
+                const activityName = activity ? activity.name : 'Unknown Activity';
                 const activityColor = activity ? activity.color : '#cccccc';
 
                 const row = document.createElement('tr');
@@ -661,25 +664,22 @@
                 activityLogBody.appendChild(row);
             });
 
-            // Add event listeners for new edit and delete buttons in the log
             document.querySelectorAll('.edit-log-btn').forEach(btn => btn.addEventListener('click', handleOpenEditModal));
             document.querySelectorAll('.delete-log-btn').forEach(btn => btn.addEventListener('click', handleDeleteLogEntry));
         }
 
         function handleDeleteLogEntry(event) {
-            // Handles deleting a specific log entry
             const logIdToDelete = event.target.dataset.id;
             if (confirm('Are you sure you want to delete this log entry?')) {
                 activityLog = activityLog.filter(log => log.id !== logIdToDelete);
                 saveData();
                 renderActivityLog();
-                renderSummary(); // Summary might change after deleting a log
+                renderSummary();
             }
         }
         
         // --- Edit Log Modal Logic ---
         function handleOpenEditModal(event) {
-            // Opens the modal and populates it with data from the selected log entry
             const logId = event.target.dataset.id;
             const logEntry = activityLog.find(log => log.id === logId);
             if (!logEntry) {
@@ -688,35 +688,20 @@
             }
 
             editLogIdInput.value = logEntry.id;
-            // Ensure the activity select in the modal is up-to-date and select the correct one
-            // renderActivities() already populates editLogActivitySelect
             editLogActivitySelect.value = logEntry.activityId; 
             editLogStartTimeInput.value = formatDateTimeLocal(logEntry.startTime);
             editLogEndTimeInput.value = formatDateTimeLocal(logEntry.endTime);
-            editLogNotesInput.value = logEntry.notes || ''; // Populate notes
+            editLogNotesInput.value = logEntry.notes || '';
             
             editLogModal.style.display = 'block';
         }
 
-        closeEditModalBtn.onclick = function() {
-            // Closes the edit modal
-            editLogModal.style.display = 'none';
-        }
-
-        window.onclick = function(event) {
-            // Closes the modal if user clicks outside of the modal content
-            if (event.target == editLogModal) {
-                editLogModal.style.display = 'none';
-            }
-        }
-
-        saveEditLogBtn.addEventListener('click', () => {
-            // Saves the changes made in the edit log modal
+        function handleSaveLogChanges() {
             const id = editLogIdInput.value;
             const newActivityId = editLogActivitySelect.value;
             const newStartTimeStr = editLogStartTimeInput.value;
             const newEndTimeStr = editLogEndTimeInput.value;
-            const newNotes = editLogNotesInput.value.trim(); // Get notes value
+            const newNotes = editLogNotesInput.value.trim();
 
             if (!newActivityId || !newStartTimeStr || !newEndTimeStr) {
                 alert('All fields (Activity, Start Time, End Time) are required.');
@@ -731,31 +716,30 @@
                 return;
             }
 
-            const newDuration = Math.floor((newEndTime - newStartTime) / 1000); // Duration in seconds
+            const newDuration = Math.floor((newEndTime - newStartTime) / 1000);
 
             const logIndex = activityLog.findIndex(log => log.id === id);
             if (logIndex > -1) {
                 activityLog[logIndex] = {
-                    ...activityLog[logIndex], // Preserve original ID
+                    ...activityLog[logIndex],
                     activityId: newActivityId,
                     startTime: newStartTime,
                     endTime: newEndTime,
                     duration: newDuration,
-                    notes: newNotes // Save notes
+                    notes: newNotes
                 };
                 saveData();
                 renderActivityLog();
-                renderSummary(); // Update summary as log data changed
-                editLogModal.style.display = 'none'; // Close modal on successful save
+                renderSummary();
+                editLogModal.style.display = 'none';
             } else {
                 alert('Error: Log entry not found for saving.');
             }
-        });
+        }
 
 
         // --- Summary ---
         function renderSummary() {
-            // Renders the activity summary based on selected date range
             summaryResultsDiv.innerHTML = ''; 
             
             const startDateStr = summaryStartDateInput.value;
@@ -763,21 +747,18 @@
 
             let filteredLogs = activityLog;
 
-            // Apply start date filter
             if (startDateStr) {
                 const startDate = new Date(startDateStr);
-                startDate.setHours(0, 0, 0, 0); // Set to start of the day
+                startDate.setHours(0, 0, 0, 0);
                 filteredLogs = filteredLogs.filter(log => log.startTime >= startDate.getTime());
             }
 
-            // Apply end date filter
             if (endDateStr) {
                 const endDate = new Date(endDateStr);
-                endDate.setHours(23, 59, 59, 999); // Set to end of the day
+                endDate.setHours(23, 59, 59, 999);
                 filteredLogs = filteredLogs.filter(log => log.endTime <= endDate.getTime());
             }
             
-            // Clear previous chart if it exists
             if (summaryPieChartInstance) {
                 summaryPieChartInstance.destroy();
                 summaryPieChartInstance = null;
@@ -785,24 +766,13 @@
             const pieChartCanvas = document.getElementById('summaryPieChart');
             const ctx = pieChartCanvas.getContext('2d');
 
-            if (filteredLogs.length === 0 && (startDateStr || endDateStr)) { // If dates are set but no logs
+            if (filteredLogs.length === 0) {
                 summaryResultsDiv.innerHTML = '<p class="text-gray-500 text-sm">No activity data for the selected period.</p>';
-                pieChartCanvas.style.display = 'none'; // Hide chart
-                return;
-            }
-             if (filteredLogs.length === 0 && activityLog.length > 0 && (!startDateStr && !endDateStr)) { 
-                summaryResultsDiv.innerHTML = '<p class="text-gray-500 text-sm">No activity data for the selected period.</p>';
-                pieChartCanvas.style.display = 'none'; // Hide chart
-                return;
-            }
-            if (activityLog.length === 0){ // No logs at all
-                 summaryResultsDiv.innerHTML = '<p class="text-gray-500 text-sm">No activities logged yet. Start timing an activity!</p>';
-                 pieChartCanvas.style.display = 'none'; // Hide chart
+                pieChartCanvas.style.display = 'none';
                 return;
             }
 
-
-            const summary = {}; // Stores total time per activityId: { activityId: totalSeconds, ... }
+            const summary = {};
             filteredLogs.forEach(log => {
                 if (!summary[log.activityId]) {
                     summary[log.activityId] = 0;
@@ -810,15 +780,13 @@
                 summary[log.activityId] += log.duration;
             });
 
-            if (Object.keys(summary).length === 0) { // No activities to summarize in the filtered logs
-                 summaryResultsDiv.innerHTML = (startDateStr || endDateStr) 
-                    ? '<p class="text-gray-500 text-sm">No activity data for the selected period.</p>'
-                    : '<p class="text-gray-500 text-sm">No activities logged yet. Start timing an activity!</p>';
-                pieChartCanvas.style.display = 'none'; // Hide chart
+            if (Object.keys(summary).length === 0) {
+                 summaryResultsDiv.innerHTML = '<p class="text-gray-500 text-sm">No activities logged yet.</p>';
+                pieChartCanvas.style.display = 'none';
                 return;
             }
             
-            pieChartCanvas.style.display = 'block'; // Show chart
+            pieChartCanvas.style.display = 'block';
             const summaryList = document.createElement('ul');
             summaryList.className = 'space-y-1';
 
@@ -826,10 +794,9 @@
             const chartData = [];
             const chartColors = [];
 
-            // Create and display list items for each summarized activity
             for (const activityId in summary) {
                 const activity = activities.find(act => act.id === activityId);
-                const activityName = activity ? activity.name : 'Unknown Activity (ID: ' + activityId + ')';
+                const activityName = activity ? activity.name : 'Unknown Activity';
                 const activityColor = activity ? activity.color : '#cccccc';
                 const totalTime = formatTime(summary[activityId]);
 
@@ -850,7 +817,6 @@
             }
             summaryResultsDiv.appendChild(summaryList);
 
-            // Render Pie Chart
             summaryPieChartInstance = new Chart(ctx, {
                 type: 'pie',
                 data: {
@@ -890,6 +856,10 @@
 
         // --- Data Export/Import ---
         function handleExportData() {
+            if (!currentUser) {
+                alert("Please log in to export data.");
+                return;
+            }
             const dataToExport = {
                 activities: activities,
                 activityLog: activityLog
@@ -899,15 +869,19 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `activity_tracker_data_${new Date().toISOString().slice(0,10)}.json`;
+            a.download = `activity_tracker_${currentUser}_${new Date().toISOString().slice(0,10)}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            alert('Data exported successfully!');
+            alert(`Data for user '${currentUser}' exported successfully!`);
         }
 
         function handleImportData(event) {
+            if (!currentUser) {
+                alert("Please log in to import data.");
+                return;
+            }
             const file = event.target.files[0];
             if (!file) {
                 return;
@@ -917,7 +891,7 @@
                 try {
                     const importedData = JSON.parse(e.target.result);
                     if (importedData && Array.isArray(importedData.activities) && Array.isArray(importedData.activityLog)) {
-                        if (confirm('This will replace all current activities and logs. Are you sure?')) {
+                        if (confirm(`This will replace all current activities and logs for user '${currentUser}'. Are you sure?`)) {
                             activities = importedData.activities;
                             activityLog = importedData.activityLog;
                             saveData();
@@ -933,7 +907,6 @@
                     console.error('Error importing data:', error);
                     alert('Error importing data. Check console for details.');
                 } finally {
-                    // Reset file input to allow importing the same file again
                     importDataInput.value = '';
                 }
             };
@@ -944,39 +917,104 @@
             reader.readAsText(file);
         }
 
+        // --- User Session Management ---
+        function login(username) {
+            currentUser = username;
+            localStorage.setItem('activityTracker_currentUser', currentUser);
 
-        // --- Event Listeners ---
-        addActivityBtn.addEventListener('click', handleAddActivity);
-        startStopBtn.addEventListener('click', handleStartStop);
-        resetBtn.addEventListener('click', handleResetTimer);
-        generateSummaryBtn.addEventListener('click', renderSummary); // Manual trigger for summary
-        logFilterActivitySelect.addEventListener('change', renderActivityLog); // Update log when filter changes
-        
-        // Auto-update summary when date inputs change
-        summaryStartDateInput.addEventListener('change', renderSummary); 
-        summaryEndDateInput.addEventListener('change', renderSummary);   
+            usernameDisplay.textContent = currentUser;
+            userSessionDiv.style.display = 'block';
+            loginModal.style.display = 'none';
+            mainContent.style.visibility = 'visible';
 
-        // Log filter listeners
-        logFilterActivitySelect.addEventListener('change', renderActivityLog);
-        logFilterStartDateInput.addEventListener('change', renderActivityLog);
-        logFilterEndDateInput.addEventListener('change', renderActivityLog);
+            initAppForUser();
+        }
 
-        // Export/Import Listeners
-        exportDataBtn.addEventListener('click', handleExportData);
-        importDataInput.addEventListener('change', handleImportData);
+        function logout() {
+            if (confirm('Are you sure you want to logout? Any unsaved timer progress will be lost.')) {
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
+
+                currentUser = null;
+                localStorage.removeItem('activityTracker_currentUser');
+
+                userSessionDiv.style.display = 'none';
+                usernameDisplay.textContent = '';
+                mainContent.style.visibility = 'hidden';
+                
+                activities = [];
+                activityLog = [];
+                resetTimerFull();
+
+                renderActivities();
+                renderActivityLog();
+                renderSummary();
+
+                loginModal.style.display = 'block';
+            }
+        }
+
+        function checkForLoggedInUser() {
+            const savedUser = localStorage.getItem('activityTracker_currentUser');
+            if (savedUser) {
+                login(savedUser);
+            } else {
+                loginModal.style.display = 'block';
+            }
+        }
 
 
         // --- Initialization ---
-        function init() {
-            // Initial setup when the page loads
-            loadData();          // Load any saved data from local storage
-            renderActivities();  // Display activities and populate dropdowns
-            renderActivityLog(); // Display activity logs
-            renderSummary();     // Display initial summary (all time)
-            updateTimerDisplay();// Ensure timer shows 00:00:00 initially
+        function initAppForUser() {
+            loadData();
+            renderActivities();
+            renderActivityLog();
+            renderSummary();
+            updateTimerDisplay();
         }
 
-        // Run initialization function once the DOM is fully loaded
+        function init() {
+            // Event listeners
+            loginBtn.addEventListener('click', () => {
+                const username = usernameInput.value.trim();
+                if (username) {
+                    login(username);
+                } else {
+                    alert('Please enter a username.');
+                }
+            });
+            logoutBtn.addEventListener('click', logout);
+
+            addActivityBtn.addEventListener('click', handleAddActivity);
+            startStopBtn.addEventListener('click', handleStartStop);
+            resetBtn.addEventListener('click', handleResetTimer);
+            generateSummaryBtn.addEventListener('click', renderSummary);
+            
+            summaryStartDateInput.addEventListener('change', renderSummary); 
+            summaryEndDateInput.addEventListener('change', renderSummary);   
+
+            logFilterActivitySelect.addEventListener('change', renderActivityLog);
+            logFilterStartDateInput.addEventListener('change', renderActivityLog);
+            logFilterEndDateInput.addEventListener('change', renderActivityLog);
+
+            exportDataBtn.addEventListener('click', handleExportData);
+            importDataInput.addEventListener('change', handleImportData);
+
+            saveEditLogBtn.addEventListener('click', handleSaveLogChanges);
+            closeEditModalBtn.onclick = function() {
+                editLogModal.style.display = 'none';
+            }
+            window.onclick = function(event) {
+                if (event.target == editLogModal) {
+                    editLogModal.style.display = 'none';
+                }
+            }
+
+            checkForLoggedInUser();
+        }
+
         document.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
